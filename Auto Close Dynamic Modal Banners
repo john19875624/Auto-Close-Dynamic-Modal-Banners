@@ -1,0 +1,63 @@
+// ==UserScript==
+// @name         Auto Close Dynamic Modal Banners
+// @namespace    http://tampermonkey.net/
+// @version      1.2
+// @description  Automatically close all modal banners, including dynamically updated ones, with faster interval
+// @author       Grok
+// @match        https://www.e-nextlevel.jp/work/list
+// @grant        none
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    // モーダルバナーを閉じる関数
+    function closeModals() {
+        // モーダルバナーを取得（modalクラスを持つ要素、または類似の構造）
+        const modals = document.querySelectorAll('.modal, [class*="modal"]');
+        modals.forEach(modal => {
+            // モーダルが表示されているか確認
+            if (modal.style.display === 'block' || modal.classList.contains('in') || modal.classList.contains('show')) {
+                // 閉じるボタンを取得（data-dismissまたは一般的な閉じるボタン）
+                const closeButton = modal.querySelector('button[data-dismiss="modal"], button.close, [aria-label="Close"]');
+                if (closeButton) {
+                    closeButton.click();
+                }
+
+                // 「今後は表示しない」チェックボックスを動的に取得
+                const hideCheckbox = modal.querySelector('input[type="checkbox"][id*="check-hide"], input[type="checkbox"][name*="hide"]');
+                if (hideCheckbox && !hideCheckbox.checked) {
+                    hideCheckbox.click();
+                }
+            }
+        });
+    }
+
+    // ページ読み込み時に初回実行
+    window.addEventListener('load', closeModals);
+
+    // DOM変更を監視して動的に追加されるモーダルに対応
+    const observer = new MutationObserver((mutations) => {
+        let modalDetected = false;
+        mutations.forEach(mutation => {
+            // 追加されたノードにモーダルが含まれるかチェック
+            mutation.addedNodes.forEach(node => {
+                if (node.nodeType === 1 && (node.matches('.modal, [class*="modal"]') || node.querySelector('.modal, [class*="modal"]'))) {
+                    modalDetected = true;
+                }
+            });
+        });
+        if (modalDetected) {
+            closeModals();
+        }
+    });
+
+    // 監視開始（body全体を監視）
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
+
+    // 定期的にモーダルをチェック（間隔を500msに短縮）
+    setInterval(closeModals, 500); // 0.5秒ごとにチェック
+})();
