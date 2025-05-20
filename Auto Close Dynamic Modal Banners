@@ -1,63 +1,83 @@
 // ==UserScript==
-// @name         Auto Close Dynamic Modal Banners
+// @name         Auto Close Dynamic Modal Banners (with Logging)
 // @namespace    http://tampermonkey.net/
-// @version      1.2
-// @description  Automatically close all modal banners, including dynamically updated ones, with faster interval
+// @version      1.4
+// @description  Automatically close all modal banners dynamically, with logging
 // @author       Grok
 // @match        https://www.e-nextlevel.jp/work/list
 // @grant        none
 // ==/UserScript==
 
-(function() {
+(function () {
     'use strict';
 
-    // モーダルバナーを閉じる関数
-    function closeModals() {
-        // モーダルバナーを取得（modalクラスを持つ要素、または類似の構造）
-        const modals = document.querySelectorAll('.modal, [class*="modal"]');
-        modals.forEach(modal => {
-            // モーダルが表示されているか確認
-            if (modal.style.display === 'block' || modal.classList.contains('in') || modal.classList.contains('show')) {
-                // 閉じるボタンを取得（data-dismissまたは一般的な閉じるボタン）
-                const closeButton = modal.querySelector('button[data-dismiss="modal"], button.close, [aria-label="Close"]');
-                if (closeButton) {
-                    closeButton.click();
-                }
-
-                // 「今後は表示しない」チェックボックスを動的に取得
-                const hideCheckbox = modal.querySelector('input[type="checkbox"][id*="check-hide"], input[type="checkbox"][name*="hide"]');
-                if (hideCheckbox && !hideCheckbox.checked) {
-                    hideCheckbox.click();
-                }
-            }
-        });
+    // 指定されたモーダルが表示中か判定
+    function isModalVisible(modal) {
+        return modal.style.display === 'block' ||
+               modal.classList.contains('in') ||
+               modal.classList.contains('show');
     }
 
-    // ページ読み込み時に初回実行
-    window.addEventListener('load', closeModals);
+    // モーダル内の要素をチェックして閉じる処理を行う
+    function checkAndCloseModal(modal) {
+        if (!isModalVisible(modal)) return;
 
-    // DOM変更を監視して動的に追加されるモーダルに対応
-    const observer = new MutationObserver((mutations) => {
-        let modalDetected = false;
-        mutations.forEach(mutation => {
-            // 追加されたノードにモーダルが含まれるかチェック
-            mutation.addedNodes.forEach(node => {
-                if (node.nodeType === 1 && (node.matches('.modal, [class*="modal"]') || node.querySelector('.modal, [class*="modal"]'))) {
-                    modalDetected = true;
-                }
-            });
-        });
-        if (modalDetected) {
-            closeModals();
+        console.log('[Modal AutoClose] 表示中のモーダル検出:', modal);
+
+        // 閉じるボタンを探してクリック
+        const closeButton = modal.querySelector('button[data-dismiss="modal"], button.close, [aria-label="Close"]');
+        if (closeButton) {
+            closeButton.click();
+            console.log('[Modal AutoClose] 閉じるボタンをクリックしました');
+        } else {
+            console.log('[Modal AutoClose] 閉じるボタンが見つかりません');
         }
+
+        // 「今後表示しない」チェックボックスがあればチェック
+        const doNotShowCheckbox = modal.querySelector('input[type="checkbox"][id*="check-hide"], input[type="checkbox"][name*="hide"]');
+        if (doNotShowCheckbox && !doNotShowCheckbox.checked) {
+            doNotShowCheckbox.click();
+            console.log('[Modal AutoClose] 「今後表示しない」チェックボックスをオンにしました');
+        }
+    }
+
+    // すべてのモーダル要素をチェックして必要に応じて閉じる
+    function closeVisibleModals() {
+        const modalElements = document.querySelectorAll('.modal, [class*="modal"]');
+        if (modalElements.length > 0) {
+            console.log(`[Modal AutoClose] モーダル候補 ${modalElements.length} 件を確認`);
+        }
+        modalElements.forEach(checkAndCloseModal);
+    }
+
+    // MutationObserverのコールバック関数
+    function onMutations(mutations) {
+        const hasModalAdded = mutations.some(mutation =>
+            Array.from(mutation.addedNodes).some(node =>
+                node.nodeType === 1 &&
+                (node.matches('.modal, [class*="modal"]') || node.querySelector('.modal, [class*="modal"]'))
+            )
+        );
+        if (hasModalAdded) {
+            console.log('[Modal AutoClose] DOMに新しいモーダルが追加されました');
+            closeVisibleModals();
+        }
+    }
+
+    // 初回ロード時の実行
+    window.addEventListener('load', () => {
+        console.log('[Modal AutoClose] ページ読み込み完了 - 初回チェック開始');
+        closeVisibleModals();
     });
 
-    // 監視開始（body全体を監視）
-    observer.observe(document.body, {
-        childList: true,
-        subtree: true
-    });
+    // DOMの変更を監視して動的に追加されるモーダルにも対応
+    const observer = new MutationObserver(onMutations);
+    observer.observe(document.body, { childList: true, subtree: true });
+    console.log('[Modal AutoClose] MutationObserver を初期化しました');
 
-    // 定期的にモーダルをチェック（間隔を500msに短縮）
-    setInterval(closeModals, 500); // 0.5秒ごとにチェック
+    // 定期的なチェック（0.5秒ごと）
+    setInterval(() => {
+        console.log('[Modal AutoClose] 定期チェック実行中');
+        closeVisibleModals();
+    }, 500);
 })();
